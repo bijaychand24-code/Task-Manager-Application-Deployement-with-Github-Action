@@ -1,0 +1,26 @@
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Pytest cache
+.pytest_cache/
+
+# Git
+.git/
+.github/
+
+# Environment/secrets
+.env
+
+# Tests
+tests/
+
+# Documentation
+*.md
+
+# OS files
+.DS_Store
+Thumbs.db
