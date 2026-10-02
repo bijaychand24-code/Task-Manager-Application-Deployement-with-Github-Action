@@ -1,0 +1,62 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Task Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:'class'};if(localStorage.dark==='1')document.documentElement.classList.add('dark')</script>
+<style type="text/tailwindcss">.in{@apply p-2 border rounded w-full bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600}.btn{@apply px-3 py-1 rounded bg-white dark:bg-slate-700 dark:text-white shadow}</style></head>
+<body class="bg-slate-100 dark:bg-slate-900 min-h-screen p-4">
+<div class="max-w-6xl mx-auto space-y-4">
+<header class="flex flex-wrap items-center gap-2 justify-between">
+ <h1 class="text-2xl font-bold dark:text-white">Task Manager</h1>
+ <div class="flex flex-wrap gap-2 text-sm">
+  <button class="btn" onclick="setView('list')">List</button><button class="btn" onclick="setView('kanban')">Kanban</button>
+  <a class="btn" href="/api/export?format=csv">CSV</a><a class="btn" href="/api/export?format=json">JSON</a>
+  <button class="btn" onclick="toggleDark()">Dark</button><button class="btn" onclick="logout()">Logout</button></div></header>
+<div id="stats" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
+<form id="f" class="bg-white dark:bg-slate-800 p-3 rounded-lg shadow grid gap-2 md:grid-cols-4">
+ <input id="title" class="in md:col-span-2" placeholder="Title" required>
+ <input id="description" class="in md:col-span-2" placeholder="Description">
+ <select id="priority" class="in"><option>Low</option><option selected>Medium</option><option>High</option><option>Urgent</option></select>
+ <input id="due_date" type="date" class="in">
+ <input id="category" class="in" placeholder="Category">
+ <input id="tags" class="in" placeholder="Tags (comma separated)">
+ <select id="recurrence" class="in"><option value="none">No repeat</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select>
+ <button class="md:col-span-3 bg-indigo-600 text-white rounded p-2">Add task</button></form>
+<div class="grid gap-2 grid-cols-2 md:grid-cols-4">
+ <input id="q" class="in" placeholder="Search..." oninput="load()">
+ <select id="fs" class="in" onchange="load()"><option value="">All status</option><option>Todo</option><option>In Progress</option><option>Done</option></select>
+ <select id="fp" class="in" onchange="load()"><option value="">All priority</option><option>Urgent</option><option>High</option><option>Medium</option><option>Low</option></select>
+ <select id="so" class="in" onchange="load()"><option value="created">Newest</option><option value="due">Due date</option><option value="priority">Priority</option></select></div>
+<div id="board"></div></div>
+<script>
+const $=id=>document.getElementById(id);let view='list';
+const PC={Urgent:'bg-red-100 text-red-700',High:'bg-orange-100 text-orange-700',Medium:'bg-blue-100 text-blue-700',Low:'bg-slate-200 text-slate-700'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api=async(url,method='GET',body)=>{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body&&JSON.stringify(body)});
+ if(r.status===401){location='/login';throw 0}
+ if(!r.ok){const j=await r.json().catch(()=>({}));alert(typeof j.detail==='string'?j.detail:'Invalid input');throw 0}
+ return r.status===204?null:r.json()};
+function card(t){
+ const subs=t.subtasks.map(s=>`<label class="flex gap-2 text-sm"><input type="checkbox" ${s.done?'checked':''} onchange="tog(${t.id},${s.id},this.checked)"><span class="${s.done?'line-through opacity-60':''}">${esc(s.title)}</span></label>`).join('');
+ return `<div draggable="true" ondragstart="event.dataTransfer.setData('id',${t.id})" class="p-3 rounded-lg shadow bg-white dark:bg-slate-800 dark:text-slate-100 border-l-4 ${t.overdue?'border-red-500':'border-transparent'} space-y-1">
+ <div class="flex justify-between gap-2"><b>${esc(t.title)}</b><span class="text-xs px-2 rounded ${PC[t.priority]}">${t.priority}</span></div>
+ ${t.description?`<p class="text-sm opacity-80">${esc(t.description)}</p>`:''}
+ <p class="text-xs opacity-70">${t.due_date?'Due '+t.due_date:''} ${t.overdue?'<b class="text-red-500">OVERDUE</b>':''} ${t.category?'· '+esc(t.category):''} ${t.tags?'· #'+esc(t.tags):''} ${t.recurrence!=='none'?'· repeats '+t.recurrence:''}</p>${subs}
+ <div class="flex gap-2 text-xs pt-1"><select onchange="setStatus(${t.id},this.value)" class="border rounded dark:bg-slate-700">${['Todo','In Progress','Done'].map(s=>`<option ${s===t.status?'selected':''}>${s}</option>`).join('')}</select>
+ <button onclick="addSub(${t.id})" class="text-indigo-500">+ subtask</button><button onclick="del(${t.id})" class="text-red-500 ml-auto">Delete</button></div></div>`}
+async function load(){
+ const p=new URLSearchParams({q:$('q').value,status:$('fs').value,priority:$('fp').value,sort:$('so').value,size:200});
+ const [d,s]=await Promise.all([api('/api/tasks?'+p),api('/api/stats')]);
+ $('stats').innerHTML=[['Total',s.total],['Completed',s.completed],['Pending',s.pending],['Overdue',s.overdue],['Completion',s.completion_rate+'%']].map(([k,v])=>`<div class="p-3 rounded-lg bg-white dark:bg-slate-800 dark:text-white shadow text-center"><div class="text-2xl font-bold">${v}</div><div class="text-xs opacity-70">${k}</div></div>`).join('');
+ $('board').innerHTML=view==='list'
+  ?`<div class="grid gap-3 md:grid-cols-2">${d.items.map(card).join('')||'<p class="dark:text-white">No tasks yet.</p>'}</div>`
+  :`<div class="grid gap-4 md:grid-cols-3">${['Todo','In Progress','Done'].map(st=>`<div ondragover="event.preventDefault()" ondrop="drop(event,'${st}')" class="min-h-[200px] p-2 rounded-lg bg-slate-200 dark:bg-slate-900 space-y-2"><h3 class="font-semibold dark:text-white">${st}</h3>${d.items.filter(t=>t.status===st).map(card).join('')}</div>`).join('')}</div>`}
+$('f').onsubmit=async e=>{e.preventDefault();const b={};['title','description','priority','category','tags','recurrence'].forEach(k=>b[k]=$(k).value);b.due_date=$('due_date').value||null;await api('/api/tasks','POST',b);e.target.reset();load()};
+const setStatus=async(id,status)=>{await api('/api/tasks/'+id,'PATCH',{status});load()};
+const drop=(e,st)=>{e.preventDefault();setStatus(+e.dataTransfer.getData('id'),st)};
+const tog=async(id,sid,done)=>{await api(`/api/tasks/${id}/subtasks/${sid}`,'PATCH',{done});load()};
+const addSub=async id=>{const title=prompt('Subtask title');if(title){await api(`/api/tasks/${id}/subtasks`,'POST',{title});load()}};
+const del=async id=>{if(confirm('Delete this task?')){await api('/api/tasks/'+id,'DELETE');load()}};
+const setView=v=>{view=v;load()};
+const toggleDark=()=>{localStorage.dark=document.documentElement.classList.toggle('dark')?'1':'0'};
+const logout=async()=>{await fetch('/api/logout',{method:'POST'});location='/login'};
+load();
+</script></body></html>
