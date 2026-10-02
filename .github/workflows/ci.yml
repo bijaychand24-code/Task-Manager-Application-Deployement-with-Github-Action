@@ -1,14 +1,23 @@
-name: Task Manager CI
+name: Task Manager CI/CD
 
 on:
   push:
     branches:
       - master
+
   pull_request:
     branches:
       - master
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/task-manager
+
 jobs:
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -30,3 +39,32 @@ jobs:
       - name: Run tests
         run: |
           pytest -v
+
+  docker:
+    name: Build and Push Docker Image
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
