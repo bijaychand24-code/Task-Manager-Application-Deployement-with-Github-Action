@@ -1,4 +1,40 @@
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables / secrets
 .env
+
+# Pytest cache
+.pytest_cache/
+
+# Git
+.git/
+
+# OS files
+.DS_Store
+Thumbs.db
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables / secrets
+.env
+
+# Pytest cache
+.pytest_cache/
+
+# Git
+.git/
+
+# OS files
+.DS_Store
+Thumbs.db
 *.db
 __pycache__/
 .pytest_cache/
